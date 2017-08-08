@@ -1,0 +1,105 @@
+---
+title: "Severe Weather Damage Analysis Between 1950 and 2000"
+author: "Peter Kearns"
+date: "August 7, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Introduction
+
+The following is an analysis of natianal severe weather events.  The goal is to determine the types of events that cause the most public health problems, as well as the most economic damage  This will ne based on NOAA's storm database that contains many charavteristics of storms and weather events in the United States.  We will be determining public health concern by the number of injuries and fatalities.  The economic damage will be calculated using the Property Damage, and Crop Damage estimations(in US Dollars).
+
+
+### Data Processing
+
+The first step, as usual, is to load and prepare the data.  Dealing with missing values and transforming the fields to something more useful will save us work down the pipeline.  The following code navigates to the directory where the files are stored and then reads it into the analysis.  To make processing the data easies the "PROPDMG" field is calculated using the "PROPDMGEXP" field, this means 1 K is now showsn as 1000.  The data is also aggregated into subsets for ease of use. 
+
+
+```{r read}
+library(ggplot2)
+setwd("C:/Users/peter.kearns/Documents/R_Projects/Coursera/ReproducibleProject2")
+disasterData = read.csv("repdata%2Fdata%2FStormData.csv")
+```
+The following code uses the aggregate function to sum the number of injuries and fatalities accross event types.  This is then stored in a new dataframe
+```{r injuryData}
+injuryData = aggregate(cbind(disasterData$INJURIES,disasterData$FATALITIES),list(type = disasterData$EVTYPE),sum)
+colnames(injuryData) = c("Type","Injuries", "Fatalities")
+```
+Next we follow a similar process for the damage data.  First we calculate the damage value by multiplying "PROPDMG" by its corresponding "PROPDMGEXP" field.  This will give us a value of the damage that we then sum over the event type.
+```{r disasterDataProp}
+disasterDataTemp = disasterData$PROPDMGEXP %in% c("b","B")
+disasterData[disasterDataTemp,"PROPDMG"] = disasterData[disasterDataTemp,"PROPDMG"]*1000000000
+disasterDataTemp = disasterData$PROPDMGEXP %in% c("m","M")
+disasterData[disasterDataTemp,"PROPDMG"] = disasterData[disasterDataTemp,"PROPDMG"]*1000000
+disasterDataTemp = disasterData$PROPDMGEXP %in% c("k","K")
+disasterData[disasterDataTemp,"PROPDMG"] = disasterData[disasterDataTemp,"PROPDMG"]*1000
+disasterDataTemp = disasterData$PROPDMGEXP %in% c("h","H")
+disasterData[disasterDataTemp,"PROPDMG"] = disasterData[disasterDataTemp,"PROPDMG"]*100
+```
+We do this again for the crop damage data.
+```{r disasterDataCrop}
+disasterDataTemp = disasterData$CROPDMGEXP %in% c("b","B")
+disasterData[disasterDataTemp,"CROPDMG"] = disasterData[disasterDataTemp,"CROPDMG"]*1000000000
+disasterDataTemp = disasterData$CROPDMGEXP %in% c("m","M")
+disasterData[disasterDataTemp,"CROPDMG"] = disasterData[disasterDataTemp,"CROPDMG"]*1000000
+disasterDataTemp = disasterData$CROPDMGEXP %in% c("k","K")
+disasterData[disasterDataTemp,"CROPDMG"] = disasterData[disasterDataTemp,"CROPDMG"]*1000
+disasterDataTemp = disasterData$CROPDMGEXP %in% c("h","H")
+disasterData[disasterDataTemp,"CROPDMG"] = disasterData[disasterDataTemp,"CROPDMG"]*100
+```
+The following code is the aggregate function mentioned above.
+```{r dmgAggregate}
+damageData = aggregate(cbind(disasterData$PROPDMG,disasterData$CROPDMG),list(type = disasterData$EVTYPE),sum)
+colnames(damageData) = c("Type","PROPDMG", "CROPDMG")
+```
+
+## Results
+
+There are over 900 types of events tracked in this database, In order to determine those that have the most influence, we will only look at the top 5 for each analysis.
+
+### Public Health Analysis
+
+This question was asked to be answered with a historgram plot.  The code below is for producing the histogram, and shows that for the majority of days between 10000 and 15000 steps are taken.
+
+```{r injuries, echo=TRUE}
+par(mfrow=c(1,2),mar=c(10,4,4,2))
+sortedInjury = injuryData[order(-injuryData$Injuries),]
+sortedInjury = sortedInjury[1:5,]
+barplot(sortedInjury$Injuries, names.arg = sortedInjury$Type,main = "Top 5 Injury Causing events", ylab = "Injuries",horiz=F, las=2,col="lightblue")
+sortedFatality = injuryData[order(-injuryData$Fatalities),]
+sortedFatality = sortedFatality[1:5,]
+barplot(sortedFatality$Fatalities, names.arg = sortedFatality$Type,main = "Top 5 Fatality Causing events",ylab = "Fatalities",horiz=F, las=2,col="lightblue")
+
+```
+
+The results of this analysis shows that Tornados are the most harmful weather event for the population.  In terms of both injuries and fatalities, Tornados lead by a significant margin.
+
+The next steps would be to analyze frequency to see if they are the most dangerous simply because they are the most common, and to determine where most of the injuries take place,
+
+### Economic Damage Analysis
+
+This analysis was done to determine which of the weather events caused the most damage.  Because we are looking at sums over 50 years I have removed the labels due to the numbers being so large. Also, in this instance we will be again looking at only the 5 most costly types of disasters.
+
+```{r economy, echo = TRUE}
+par(mfrow=c(1,1),mar=c(10,4,4,2))
+
+damageData = cbind(damageData,rowSums(damageData[,2:3]))
+colnames(damageData) = c("Type","PROPDMG", "CROPDMG","TotalDamage")
+
+sortedDamage = damageData[order(-damageData$TotalDamage),]
+sortedDamage = sortedDamage[1:5,]
+
+barplot(sortedDamage$TotalDamage/(10^9), names.arg = sortedDamage$Type,main = "Top 5 Damage Causing Events",ylab = "Damage",horiz=F, las=2,col="lightblue",, yaxt='n')
+```
+
+
+
+The figure above shows that floods are the most damaging events when looking at total damage caused in dollar ammounts.  The next steps for this analysis would be to examine the differences in property damage and crop damage. 
+
+## Conclusion
+
+To condense the findings here, we can see clearly that recources should be allocated to preventing or preparing for Tornadoes, and Floods.  With Tornadoes being the most dangerous to the general population, and Floods doing the most property damage.  
